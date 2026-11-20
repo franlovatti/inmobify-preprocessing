@@ -1,60 +1,132 @@
-## Python standby template
+# 🏢 Inmobify — Inteligencia Geoespacial y Valuación del Mercado Inmobiliario Comercial (Rosario)
 
-<!-- This is an Apify template readme -->
+**Samsung Innovation Campus (SIC) — Capstone Project | Entrega 1: Analytics (ETL + EDA)**
 
-Start a new [web scraping](https://apify.com/web-scraping) project quickly and easily in Python with our Standby project template. It provides a basic structure for the [Actor](https://apify.com/actors) with [Apify SDK](https://docs.apify.com/sdk/python/) and allows you to easily add your own functionality.
+---
 
-## Included features
+## 👥 Equipo de Trabajo
 
-- **[Apify SDK](https://docs.apify.com/sdk/python/)** for Python - a toolkit for building Apify [Actors](https://apify.com/actors) and scrapers in Python
+* **Nombre del Grupo:** Inmobify
+* **Nombre del Proyecto:** Inmobify — Pipeline Automatizado de Datos Inmobiliarios y Entorno Comercial en Rosario
+* **Integrantes:**
+  * Francisco Lovatti
+  * Matias Radice
 
-## Resources
+---
 
-- [Actor Standby documentation](https://docs.apify.com/platform/actors/development/programming-interface/standby)
+## 🔗 Recursos Asociados (Producción y Entregables)
 
+| Recurso | Descripción | Enlace |
+| :--- | :--- | :--- |
+| **Dashboard Interactivo** | Aplicación web en Streamlit Cloud conectada en vivo al Key-Value Store de Apify | [Inmobify.streamlit.app](https://inmobify.streamlit.app) |
+| **Orquestación ETL (Make)** | Escenario automatizado (`Google Drive` $\leftrightarrow$ `Apify` $\rightarrow$ `Google Drive`) | [Make/Inmobify-preprocessing](https://us2.make.com/public/shared-scenario/xX9odpDyFj5/inmobiby-preprocessing) |
+| **Datasets (Crudos y Limpio)** | Carpeta compartida con insumos crudos y `dataset_inmobiliario_completo_rosario.csv` | [Crudos](https://drive.google.com/drive/folders/1ocF57VMkUzPyvAdw0Y-cl2pmDxBNS3VL?usp=drive_link) [Resultados](https://drive.google.com/drive/folders/1ghXKHo9peCMlSjbvKN7nSISs9E2WdDcN?usp=drive_link) |
 
-## Getting started
+<p align="center"><img src="./make-inmobify-preprocessing.png" alt="Flujo de Make - Inmobify Preprocessing" width="100%"></p>
 
-For complete information [see this article](https://docs.apify.com/platform/actors/development#build-actor-at-apify-console). In short, you will:
+---
 
-1. Build the Actor
-2. Run the Actor
+## ⚙️ Arquitectura del Pipeline End-to-End
 
-## Pull the Actor for local development
+El flujo de datos integra **Google Drive**, **Make**, **Apify** y **Streamlit** en una arquitectura desacoplada y reproducible:
 
-If you would like to develop locally, you can pull the existing Actor from Apify console using Apify CLI:
+```text
+[Google Drive: /Inmobify-preprocessing]
+  ├── raw_zonaprop_rosario.csv (1.079 avisos)
+  └── maestro_comercios_rosario.csv (2.100 comercios)
+            │
+            ▼  (Make: Watch Files + Download + HTTP PUT + Array Aggregator)
+[Apify Key-Value Store: inmobify-storage]
+            │
+            ▼  (Make: Run an Actor — inmobify2/inmobify-preprocessing)
+[Actor Python ETL + Feature Engineering + EDA]
+  ├── Limpieza, normalización ARS/USD y filtrado geográfico (477 propiedades)
+  ├── Cálculo Haversine en radios de 200m / 350m y distancia a polos comerciales
+  └── Generación de KPIs de mercado por barrio y tipo de inmueble (33 features)
+            │
+            ├──────────────────────────────┐
+            ▼                              ▼
+[Apify Key-Value Store]          [Make: HTTP GET + Upload]
+  └── Consumo en vivo vía SDK      └── Respaldo en Google Drive (/Inmobify-preprocessing-results)
+            │
+            ▼
+[Dashboard Interactivo en Streamlit Cloud]
 
-1. Install `apify-cli`
+```
 
-    **Using Homebrew**
+---
 
-    ```bash
-    brew install apify-cli
-    ```
+## 🎯 Fenómeno Estudiado, Selección de Features y Métricas de Negocio
 
-    **Using NPM**
+### 1. Problemática y Targets
 
-    ```bash
-    npm -g install apify-cli
-    ```
+En el mercado de alquileres comerciales de Rosario (locales y oficinas), los precios publicados presentan alta dispersión dentro de un mismo barrio debido a factores micro-geográficos (tráfico peatonal, concentración de rubros y cercanía a polos) y estructurales (economía de escala por superficie y expensas).
 
-2. Pull the Actor by its unique `<ActorId>`, which is one of the following:
-    - unique name of the Actor to pull (e.g. "apify/hello-world")
-    - or ID of the Actor to pull (e.g. "E2jjCZBezvAZnX8Rb")
+* **Target Principal (Regresión):** `log1p(precio_usd)` — canon locativo mensual en dólares (mediana global: **USD 750/mes** | **USD 8,06/m²/mes**).
+* **Target Secundario (Clasificación / Negocio):** `posicion_mercado_barrio` e `indice_precio_relativo_barrio` ($\text{IPR}$), identificando propiedades con $\text{IPR} < 0,85$ (**15 % o más por debajo** de la mediana comparable de su barrio y tipo de inmueble) como **Oportunidades**.
 
-    You can find both by clicking on the Actor title at the top of the page, which will open a modal containing both Actor unique name and Actor ID.
+### 2. Selección de Features (4 Lineales + 5 No Lineales)
 
-    This command will copy the Actor into the current directory on your local machine.
+| Feature | Tipo | Evidencia Estadística | Rol en el Modelo y Negocio |
+| --- | --- | --- | --- |
+| `log_superficie_m2` | **Lineal (1/4)** | $r = +0,773$ con `precio_usd` | Elasticidad log-log y economía de escala ($r = -0,353$ con `precio_m2_usd`) |
+| `superficie_m2` | **Lineal (2/4)** | $r = +0,741$ con `precio_usd` | Escala física directa del inmueble |
+| `es_gran_superficie` | **Lineal (3/4)** | $r = +0,689$ con `precio_usd` | Salto estructural en inmuebles $> 200\text{ m}^2$ |
+| `tiene_expensas` | **Lineal (4/4)** | $r = -0,315$ con `precio_usd` | Ajuste del canon neto por carga de expensas |
+| `barrio` + `tipo_inmueble` | **No Lineal (1/5)** | Mediana USD 6,88 a 14,20/m² | Prima por categoría edilicia y vidriera comercial |
+| `log_trafico_resenas_200m` | **No Lineal (2/5)** | $r = -0,54$ dist. Monumento | Proxy no lineal de flujo peatonal real en 200 m |
+| `densidad_comercial_200m` | **No Lineal (3/5)** | 0 a 71 comercios en 200 m | Concentración de actividad comercial inmediata |
+| `diversidad_rubros_200m` | **No Lineal (4/5)** | 0 a 36 rubros distintos | Mix comercial y sinergia de atracción de público |
+| `dist_polo_mas_cercano_m` | **No Lineal (5/5)** | Mín. Monumento/Pichincha/Pellegrini | Gradiente espacial de centralidad urbana |
 
-    ```bash
-    apify pull <ActorId>
-    ```
+### 3. Métricas de Evaluación y KPIs
 
-## Documentation reference
+Dada la fuerte **asimetría positiva (cola derecha)** de los alquileres mensuales y del tráfico comercial, se descartó el RMSE para evitar sesgo por locales de gran metraje y se establecieron:
 
-To learn more about Apify and Actors, take a look at the following resources:
+* **MAPE $\le 18\%$** (Error Porcentual Absoluto Medio): evalúa con igual equidad locales chicos de alta rotación y grandes superficies.
+* **MAE $\le \text{USD } 2,00/\text{m}^2$**: error absoluto medio en moneda dura interpretable para tasaciones inmobiliarias.
+* **KPIs en Dashboard:** Mediana Alquiler ($\text{USD } 8,06/\text{m}^2/\text{mes}$), Tasa de Oportunidades Barriales ($\text{IPR} < 0,85$), Ahorro Mediano frente a la Mediana Barrial y **Oportunidades Calificadas** ($\text{IPR} < 0,85$ + alta densidad comercial en 200 m).
 
-- [Apify SDK for JavaScript documentation](https://docs.apify.com/sdk/js)
-- [Apify SDK for Python documentation](https://docs.apify.com/sdk/python)
-- [Apify Platform documentation](https://docs.apify.com/platform)
-- [Join our developer community on Discord](https://discord.com/invite/jyEM2PRvMU)
+---
+
+## 📂 Estructura y Contenido del Repositorio
+
+```text
+inmobify-preprocessing/
+├── .actor/
+│   ├── actor.json              # Metadatos y configuración de ejecución del Actor en Apify
+│   └── input_schema.json       # Esquema de parámetros de entrada (kv_store_name, claves CSV, tipo_cambio_usd)
+├── src/
+│   ├── __init__.py             # Inicialización del paquete fuente
+│   ├── main.py                 # Punto de entrada asíncrono del Actor (lectura/escritura en Apify Key-Value Store)
+│   ├── limpieza.py             # Normalización ARS/USD, filtrado geográfico de Rosario, imputación y remoción de outliers
+│   ├── features.py             # Ingeniería de atributos: distancias Haversine (200m/350m), polos comerciales e IPR barrial
+│   └── eda_tablas.py           # Generación de tablas resumen agregadas por barrio, tipo de inmueble y segmento
+├── dashboard/
+│   ├── app.py                  # Aplicación interactiva en Streamlit (Mapa geoespacial, EDA, Correlaciones, Métricas/KPIs y Tabla)
+├── Dockerfile                  # Imagen base Python 3.11 para despliegue serverless en Apify
+├── requirements.txt            # Dependencias del Actor ETL (apify, pandas, numpy, scipy)
+└── README.md                   # Documentación técnica del proyecto
+
+```
+
+---
+
+## 🚀 Ejecución Local
+
+### 1. Dashboard en Streamlit
+
+```bash
+pip install -r dashboard/requirements.txt
+export APIFY_TOKEN="apify_api_tu_token"
+streamlit run dashboard/app.py
+
+```
+
+### 2. Actor ETL + Feature Engineering
+
+```bash
+pip install -r requirements.txt
+apify run
+
+```
