@@ -14,31 +14,40 @@ st.set_page_config(
 
 # ------------------------------------------------------------------------------
 # CARGA DE DATOS VIA APIFY SDK (R1) CON FALLBACK LOCAL
-# ------------------------------------------------------------------------------
-@st.cache_data(ttl=600)
-@st.cache_data(ttl=600)
 @st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    token = st.secrets.get("APIFY_TOKEN", os.getenv("APIFY_TOKEN", "")).strip()
+    # 1. Lectura directa desde st.secrets o variable de entorno
+    token = ""
+    if "APIFY_TOKEN" in st.secrets:
+        token = str(st.secrets["APIFY_TOKEN"]).strip()
+    elif os.getenv("APIFY_TOKEN"):
+        token = os.getenv("APIFY_TOKEN").strip()
+
     if not token:
-        st.error("Falta configurar APIFY_TOKEN en Settings -> Secrets de Streamlit Cloud.")
+        st.error(f"No se encontró la clave APIFY_TOKEN. Claves detectadas en secrets: {list(st.secrets.keys())}")
         st.stop()
 
+    # 2. Conexión directa al Key-Value Store por ID/nombre sin depender de user().get()
     try:
         client = ApifyClient(token)
-        user_info = client.user().get()
-    except Exception as e:
-        st.error(f"Error de autenticación con Apify: {e}")
-        st.stop()
-    if not user_info or "username" not in user_info:
-        st.error("El APIFY_TOKEN configurado no es válido.")
-        st.stop()
+        # Busca el store 'inmobify-storage' en la lista de stores de la cuenta
+        stores = client.key_value_stores().list().items
+        store_match = next((s for s in stores if s.get("name") == "inmobify-storage"), None)
 
-    store_id = f"{user_info['username']}/inmobify-storage"
-    rec = client.key_value_store(store_id).get_record("dataset_inmobiliario_completo_rosario.csv")
+        if not store_match:
+            st.error("Autenticación OK, pero no se encontró el Key-Value Store 'inmobify-storage' en esta cuenta.")
+            st.stop()
+
+        rec = client.key_value_store(store_match["id"]).get_record("dataset_inmobiliario_completo_rosario.csv")
+    except Exception as e:
+        st.error(
+            f"Fallo al conectar con Apify ({type(e).__name__}: {e}). "
+            f"Prefijo leído: '{token[:10]}...' (longitud: {len(token)})"
+        )
+        st.stop()
 
     if not rec or not rec.get("value"):
-        st.error(f"No se encontró 'dataset_inmobiliario_completo_rosario.csv' en '{store_id}'.")
+        st.error("No se encontró 'dataset_inmobiliario_completo_rosario.csv' dentro de 'inmobify-storage'.")
         st.stop()
 
     val = rec["value"]
