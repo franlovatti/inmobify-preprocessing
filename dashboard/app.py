@@ -108,9 +108,7 @@ tab_mapa, tab_eda, tab_corr, tab_datos = st.tabs([
     "📋 Explorador de Oportunidades",
 ])
 
-with tab_mapa:
-    st.subheader("Distribución Geográfica y Posición respecto a la Mediana Barrial")
-    fig_map = px.scatter_mapbox(
+fig_map = px.scatter_map(
         df_f,
         lat="lat",
         lon="lon",
@@ -119,7 +117,7 @@ with tab_mapa:
         size_max=22,
         zoom=12,
         center={"lat": -32.947, "lon": -60.650},
-        mapbox_style="carto-positron",
+        map_style="carto-positron",
         color_discrete_map={
             "1. Oportunidad (<85% mediana)": "#2a9d8f",
             "2. En rango de barrio (85-115%)": "#457b9d",
@@ -139,8 +137,6 @@ with tab_mapa:
         },
         height=560,
     )
-    fig_map.update_layout(margin={"r": 0, "t": 10, "l": 0, "b": 0})
-    st.plotly_chart(fig_map, use_container_width=True)
 
 with tab_eda:
     c1, c2 = st.columns(2)
