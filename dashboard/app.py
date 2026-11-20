@@ -24,8 +24,12 @@ def cargar_datos() -> pd.DataFrame:
         st.error("Falta configurar APIFY_TOKEN en Settings -> Secrets de Streamlit Cloud.")
         st.stop()
 
-    client = ApifyClient(token)
-    user_info = client.user().get()
+    try:
+        client = ApifyClient(token)
+        user_info = client.user().get()
+    except Exception as e:
+        st.error(f"Error de autenticación con Apify: {e}")
+        st.stop()
     if not user_info or "username" not in user_info:
         st.error("El APIFY_TOKEN configurado no es válido.")
         st.stop()
