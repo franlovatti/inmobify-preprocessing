@@ -16,17 +16,25 @@ st.set_page_config(
 # CARGA DE DATOS VIA APIFY SDK (R1) CON FALLBACK LOCAL
 # ------------------------------------------------------------------------------
 @st.cache_data(ttl=600)
+@st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    token = st.secrets.get("APIFY_TOKEN", os.getenv("APIFY_TOKEN", ""))
-    if token:
-        client = ApifyClient(token)
-        store = client.key_value_store("inmobify-storage")
-        rec = store.get_record("dataset_inmobiliario_completo_rosario.csv")
-        if rec and rec.get("value"):
-            val = rec["value"]
-            text = val.decode("utf-8") if isinstance(val, bytes) else val
-            return pd.read_csv(io.StringIO(text))
-    return pd.read_csv("dataset_inmobiliario_completo_rosario.csv")
+    token = st.secrets.get("APIFY_TOKEN", os.getenv("APIFY_TOKEN", "")).strip()
+    if not token:
+        st.error("Falta configurar APIFY_TOKEN en Settings -> Secrets de Streamlit Cloud.")
+        st.stop()
+
+    client = ApifyClient(token)
+    store_info = client.key_value_stores().get_or_create(name="inmobify-storage")
+    store = client.key_value_store(store_info["id"])
+    rec = store.get_record("dataset_inmobiliario_completo_rosario.csv")
+
+    if not rec or not rec.get("value"):
+        st.error("No se encontró 'dataset_inmobiliario_completo_rosario.csv' dentro de 'inmobify-storage'.")
+        st.stop()
+
+    val = rec["value"]
+    text = val.decode("utf-8") if isinstance(val, bytes) else str(val)
+    return pd.read_csv(io.StringIO(text))
 
 
 df = cargar_datos()
