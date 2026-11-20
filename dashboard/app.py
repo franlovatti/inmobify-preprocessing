@@ -16,7 +16,6 @@ st.set_page_config(
 # CARGA DE DATOS VIA APIFY SDK (R1) CON FALLBACK LOCAL
 @st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    # 1. Lectura directa desde st.secrets o variable de entorno
     token = ""
     if "APIFY_TOKEN" in st.secrets:
         token = str(st.secrets["APIFY_TOKEN"]).strip()
@@ -24,34 +23,31 @@ def cargar_datos() -> pd.DataFrame:
         token = os.getenv("APIFY_TOKEN").strip()
 
     if not token:
-        st.error(f"No se encontró la clave APIFY_TOKEN. Claves detectadas en secrets: {list(st.secrets.keys())}")
+        st.error(f"No se encontró la clave APIFY_TOKEN. Claves detectadas: {list(st.secrets.keys())}")
         st.stop()
 
-    # 2. Conexión directa al Key-Value Store por ID/nombre sin depender de user().get()
     try:
         client = ApifyClient(token)
-        # Busca el store 'inmobify-storage' en la lista de stores de la cuenta
+        stores = client.key_value_stores().list().items
+        store_match = next((s for s in stores if getattr(s, "name", None) == "inmobify-storage"), None)
+
+        if not store_match:
+            st.error("Autenticación OK, pero no se encontró el Key-Value Store 'inmobify-storage'.")
+            st.stop()
+
+        rec = client.key_value_store(store_match.id).get_record("dataset_inmobiliario_completo_rosario.csv")
         val = rec.get("value") if isinstance(rec, dict) else getattr(rec, "value", None)
+
         if not val:
             st.error("No se encontró 'dataset_inmobiliario_completo_rosario.csv' dentro de 'inmobify-storage'.")
             st.stop()
 
         text = val.decode("utf-8") if isinstance(val, bytes) else str(val)
         return pd.read_csv(io.StringIO(text))
+
     except Exception as e:
-        st.error(
-            f"Fallo al conectar con Apify ({type(e).__name__}: {e}). "
-            f"Prefijo leído: '{token[:10]}...' (longitud: {len(token)})"
-        )
+        st.error(f"Fallo al conectar con Apify ({type(e).__name__}: {e}).")
         st.stop()
-
-    if not rec or not rec.get("value"):
-        st.error("No se encontró 'dataset_inmobiliario_completo_rosario.csv' dentro de 'inmobify-storage'.")
-        st.stop()
-
-    val = rec["value"]
-    text = val.decode("utf-8") if isinstance(val, bytes) else str(val)
-    return pd.read_csv(io.StringIO(text))
 
 
 df = cargar_datos()
