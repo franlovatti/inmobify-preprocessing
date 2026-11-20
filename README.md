@@ -6,7 +6,7 @@
 
 ## 👥 Equipo de Trabajo
 
-* **Nombre del Grupo:** Inmobify
+* **Nombre del Grupo:** Ex UM
 * **Nombre del Proyecto:** Inmobify — Pipeline Automatizado de Datos Inmobiliarios y Entorno Comercial en Rosario
 * **Integrantes:**
   * Francisco Lovatti
