@@ -1,8 +1,32 @@
 {
-    "$schema": "https://apify.com/schemas/v1/input.ide.json",
-    "title": "Actor input",
-    "type": "object",
-    "schemaVersion": 1,
-    "properties": {},
-    "required": []
+  "title": "Inmobify Preprocessing & EDA",
+  "description": "Parámetros de lectura desde el Key-Value Store de Apify para limpiar y generar las tablas del dashboard.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "kv_store_name": {
+      "title": "Nombre del Key-Value Store",
+      "type": "string",
+      "default": "inmobify-storage",
+      "editor": "textfield"
+    },
+    "key_zonaprop_raw": {
+      "title": "Clave del CSV crudo de Zonaprop",
+      "type": "string",
+      "default": "raw_zonaprop_rosario.csv",
+      "editor": "textfield"
+    },
+    "key_comercios_raw": {
+      "title": "Clave del CSV crudo/maestro de Comercios",
+      "type": "string",
+      "default": "maestro_comercios_rosario.csv",
+      "editor": "textfield"
+    },
+    "tipo_cambio_usd": {
+      "title": "Cotización USD de referencia (ARS)",
+      "type": "number",
+      "default": 1600,
+      "editor": "number"
+    }
+  }
 }
