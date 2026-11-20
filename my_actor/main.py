@@ -1,6 +1,7 @@
 import io
 import pandas as pd
 from apify import Actor
+import asyncio
 
 from src.limpieza import limpiar_zonaprop, limpiar_comercios
 from src.features import construir_features_modelo, construir_features_eda
@@ -57,3 +58,6 @@ async def main():
             "filas_eda_segmentos": len(csv3_segmentos),
         })
         await Actor.set_status_message("Preprocesamiento, Feature Engineering y EDA finalizados con éxito.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
