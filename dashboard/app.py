@@ -89,14 +89,15 @@ st.markdown(
     "y distancia a polos comerciales (*Monumento, Pichincha, Pellegrini*)."
 )
 
-k1, k2, k3, k4 = st.columns(4)
+k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Propiedades analizadas", f"{len(df_f):,}")
-k2.metric("Mediana Alquiler (USD / m² / mes)", f"USD {df_f['precio_m2_usd'].median():.2f}")
+k2.metric("Mediana Alquiler (USD)", f"USD {df_f['precio_usd'].median():,.0f}")
+k3.metric("Mediana Alquiler (USD / m² / mes)", f"USD {df_f['precio_m2_usd'].median():.2f}")
 
 mask_oport = df_f["indice_precio_relativo_barrio"] < 0.85
 cant_oport = int(mask_oport.sum())
 ahorro_med = (1 - df_f.loc[mask_oport, "indice_precio_relativo_barrio"].median()) * 100 if cant_oport > 0 else 0
-k3.metric(
+k4.metric(
     "Oportunidades (IPR < 0.85)",
     f"{cant_oport} ({cant_oport / max(len(df_f), 1) * 100:.0f}%)",
     f"-{ahorro_med:.0f}% vs mediana barrial",
@@ -104,7 +105,7 @@ k3.metric(
 
 med_dens = df_f["densidad_comercial_200m"].median()
 oport_calif = int((mask_oport & (df_f["densidad_comercial_200m"] >= med_dens)).sum())
-k4.metric(
+k5.metric(
     "Oportunidades Calificadas",
     f"{oport_calif}",
     "IPR < 0.85 + alta densidad comercial",
@@ -115,10 +116,11 @@ st.divider()
 # ------------------------------------------------------------------------------
 # PESTAÑAS PRINCIPALES
 # ------------------------------------------------------------------------------
-tab_mapa, tab_eda, tab_corr, tab_datos = st.tabs([
+tab_mapa, tab_eda, tab_corr, tab_metricas, tab_datos = st.tabs([
     "🗺️ Mapa Geoespacial",
     "📊 Análisis por Barrio y Segmento",
     "🔬 Correlaciones y Elasticidad",
+    "🎯 Métricas, KPIs y Selección de Features",
     "📋 Explorador de Oportunidades",
 ])
 
@@ -247,6 +249,137 @@ with tab_corr:
             "**Justificación estadística:** La asimetría positiva de `precio_usd` y `trafico_resenas_200m` "
             "hace que el error porcentual absoluto (MAPE) evalúe con igual justicia locales chicos "
             "de alta rotación y grandes superficies sin sesgo por outliers."
+        )
+
+with tab_metricas:
+    st.subheader("🎯 Fundamentación de Features (4 Lineales + 5 No Lineales) y KPIs de Negocio")
+
+    # --- FILA 1: TORNADO DE CORRELACIONES LINEALES + DISTRIBUCIÓN DEL IPR ---
+    col_m1, col_m2 = st.columns(2)
+
+    with col_m1:
+        features_eval = [
+            "log_superficie_m2", "superficie_m2", "es_gran_superficie",
+            "tiene_expensas", "dist_pichincha_m", "ratio_densidad_200_350",
+            "densidad_comercial_200m", "dist_polo_mas_cercano_m",
+            "diversidad_rubros_200m", "log_trafico_resenas_200m"
+        ]
+        corrs = df_f[features_eval].corrwith(df_f["precio_usd"]).dropna().sort_values()
+        df_tornado = pd.DataFrame({
+            "Feature": corrs.index,
+            "Correlación (r)": corrs.values,
+            "Signo": ["Positiva (+)" if v >= 0 else "Negativa (-)" for v in corrs.values],
+        })
+        fig_tornado = px.bar(
+            df_tornado,
+            x="Correlación (r)",
+            y="Feature",
+            color="Signo",
+            orientation="h",
+            text=df_tornado["Correlación (r)"].round(3),
+            color_discrete_map={"Positiva (+)": "#2a9d8f", "Negativa (-)": "#e63946"},
+            title="Ranking de Correlación Lineal (r) con Alquiler Total (USD)",
+        )
+        fig_tornado.update_traces(textposition="outside")
+        fig_tornado.update_layout(xaxis_range=[-0.5, 0.95], showlegend=True)
+        st.plotly_chart(fig_tornado, use_container_width=True)
+
+    with col_m2:
+        fig_ipr = px.histogram(
+            df_f,
+            x="indice_precio_relativo_barrio",
+            color="posicion_mercado_barrio",
+            nbins=35,
+            color_discrete_map={
+                "1. Oportunidad (<85% mediana)": "#2a9d8f",
+                "2. En rango de barrio (85-115%)": "#457b9d",
+                "3. Premium / Sobre mediana (>115%)": "#e63946",
+            },
+            title="Distribución del Índice de Precio Relativo Barrial (IPR)",
+            labels={"indice_precio_relativo_barrio": "IPR (Precio/m² / Mediana Barrio)"},
+        )
+        fig_ipr.add_vline(
+            x=0.85, line_dash="dash", line_color="#2a9d8f",
+            annotation_text="Umbral Oportunidad (0.85)", annotation_position="top left"
+        )
+        fig_ipr.add_vline(
+            x=1.15, line_dash="dash", line_color="#e63946",
+            annotation_text="Umbral Premium (1.15)", annotation_position="top right"
+        )
+        st.plotly_chart(fig_ipr, use_container_width=True)
+
+    # --- FILA 2: BUBBLE CHART NO LINEAL + FRECUENCIA DE SEGMENTOS ---
+    col_m3, col_m4 = st.columns([1.3, 1])
+
+    with col_m3:
+        fig_bubble = px.scatter(
+            df_f,
+            x="log_trafico_resenas_200m",
+            y="precio_m2_usd",
+            size="densidad_comercial_200m",
+            color="posicion_mercado_barrio",
+            hover_name="barrio",
+            hover_data=["tipo_inmueble", "superficie_m2", "precio_usd", "diversidad_rubros_200m"],
+            color_discrete_map={
+                "1. Oportunidad (<85% mediana)": "#2a9d8f",
+                "2. En rango de barrio (85-115%)": "#457b9d",
+                "3. Premium / Sobre mediana (>115%)": "#e63946",
+            },
+            title="Interacción No Lineal: Tráfico Peatonal vs USD/m² (Tamaño = Densidad 200m)",
+            labels={
+                "log_trafico_resenas_200m": "log(Tráfico Reseñas 200m + 1)",
+                "precio_m2_usd": "Alquiler (USD / m² / mes)",
+            },
+        )
+        fig_bubble.add_hline(
+            y=df_f["precio_m2_usd"].median(), line_dash="dot", line_color="gray",
+            annotation_text=f"Mediana USD {df_f['precio_m2_usd'].median():.2f}/m²"
+        )
+        st.plotly_chart(fig_bubble, use_container_width=True)
+
+    with col_m4:
+        df_seg = (
+            df_f.groupby(["posicion_mercado_barrio", "tipo_inmueble"])
+            .size()
+            .reset_index(name="Cantidad")
+        )
+        fig_freq = px.bar(
+            df_seg,
+            x="posicion_mercado_barrio",
+            y="Cantidad",
+            color="tipo_inmueble",
+            barmode="group",
+            text="Cantidad",
+            title="Diagrama de Frecuencia: Segmentación por Tipo",
+            labels={"posicion_mercado_barrio": "Segmento de Mercado", "Cantidad": "Propiedades"},
+        )
+        fig_freq.update_traces(textposition="outside")
+        st.plotly_chart(fig_freq, use_container_width=True)
+
+    # --- FILA 3: RESUMEN DE LAS 9 FEATURES SELECCIONADAS Y META DE EVALUACIÓN ---
+    st.divider()
+    c_feat, c_met = st.columns([1.6, 1])
+    with c_feat:
+        df_features_sel = pd.DataFrame([
+            {"Feature": "log_superficie_m2", "Tipo": "Lineal (1/4)", "Evidencia": "r = +0.773 con precio_usd", "Rol": "Elasticidad log-log y economía de escala"},
+            {"Feature": "superficie_m2", "Tipo": "Lineal (2/4)", "Evidencia": "r = +0.741 con precio_usd", "Rol": "Escala física directa del inmueble"},
+            {"Feature": "es_gran_superficie", "Tipo": "Lineal (3/4)", "Evidencia": "r = +0.689 con precio_usd", "Rol": "Salto estructural en locales > 200 m²"},
+            {"Feature": "tiene_expensas", "Tipo": "Lineal (4/4)", "Evidencia": "r = -0.315 con precio_usd", "Rol": "Descuento en canon por carga de expensas"},
+            {"Feature": "barrio + tipo_inmueble", "Tipo": "No Lineal (1/5)", "Evidencia": "Mediana USD 6.88 a 14.20/m²", "Rol": "Prima por categoría edilicia y vidriera"},
+            {"Feature": "log_trafico_resenas_200m", "Tipo": "No Lineal (2/5)", "Evidencia": "r = -0.54 dist. Monumento", "Rol": "Proxy no lineal de flujo peatonal real"},
+            {"Feature": "densidad_comercial_200m", "Tipo": "No Lineal (3/5)", "Evidencia": "0 a 71 comercios en 200m", "Rol": "Concentración de oferta en el entorno inmediato"},
+            {"Feature": "diversidad_rubros_200m", "Tipo": "No Lineal (4/5)", "Evidencia": "0 a 36 rubros distintos", "Rol": "Sinergia comercial y atracción de público"},
+            {"Feature": "dist_polo_mas_cercano_m", "Tipo": "No Lineal (5/5)", "Evidencia": "Mín. Monumento/Pichincha/Pellegrini", "Rol": "Gradiente de centralidad urbana"},
+        ])
+        st.dataframe(df_features_sel, use_container_width=True, hide_index=True)
+
+    with c_met:
+        st.info(
+            "**Target Principal:** `log1p(precio_usd)` (canon mensual en USD).\n\n"
+            "**Métrica Técnica-Financiera:** **MAPE ≤ 18%** y **MAE ≤ USD 2.00/m²**.\n\n"
+            "**Justificación estadística:** La asimetría positiva de `precio_usd` y el sesgo derecho del "
+            "Índice de Precio Relativo (`IPR`) justifican usar **MAPE** y **medianas segmentadas**, "
+            "evitando que los locales de gran metraje distorsionen la evaluación."
         )
 
 with tab_datos:
