@@ -31,14 +31,13 @@ def cargar_datos() -> pd.DataFrame:
     try:
         client = ApifyClient(token)
         # Busca el store 'inmobify-storage' en la lista de stores de la cuenta
-        stores = client.key_value_stores().list().items
-        store_match = next((s for s in stores if s.get("name") == "inmobify-storage"), None)
-
-        if not store_match:
-            st.error("Autenticación OK, pero no se encontró el Key-Value Store 'inmobify-storage' en esta cuenta.")
+        val = rec.get("value") if isinstance(rec, dict) else getattr(rec, "value", None)
+        if not val:
+            st.error("No se encontró 'dataset_inmobiliario_completo_rosario.csv' dentro de 'inmobify-storage'.")
             st.stop()
 
-        rec = client.key_value_store(store_match["id"]).get_record("dataset_inmobiliario_completo_rosario.csv")
+        text = val.decode("utf-8") if isinstance(val, bytes) else str(val)
+        return pd.read_csv(io.StringIO(text))
     except Exception as e:
         st.error(
             f"Fallo al conectar con Apify ({type(e).__name__}: {e}). "
