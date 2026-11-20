@@ -108,35 +108,44 @@ tab_mapa, tab_eda, tab_corr, tab_datos = st.tabs([
     "📋 Explorador de Oportunidades",
 ])
 
-fig_map = px.scatter_map(
-        df_f,
-        lat="lat",
-        lon="lon",
-        color="posicion_mercado_barrio",
-        size="superficie_m2",
-        size_max=22,
-        zoom=12,
-        center={"lat": -32.947, "lon": -60.650},
-        map_style="carto-positron",
-        color_discrete_map={
-            "1. Oportunidad (<85% mediana)": "#2a9d8f",
-            "2. En rango de barrio (85-115%)": "#457b9d",
-            "3. Premium / Sobre mediana (>115%)": "#e63946",
-        },
-        hover_name="barrio",
-        hover_data={
-            "tipo_inmueble": True,
-            "superficie_m2": ":.0f",
-            "precio_usd": ":,.0f",
-            "precio_m2_usd": ":.2f",
-            "densidad_comercial_200m": True,
-            "diversidad_rubros_200m": True,
-            "trafico_resenas_200m": ":,.0f",
-            "lat": False,
-            "lon": False,
-        },
-        height=560,
-    )
+with tab_mapa:
+    st.subheader("Distribución Geográfica y Posición respecto a la Mediana Barrial")
+
+    df_mapa = df_f.dropna(subset=["lat", "lon"]).copy()
+    if df_mapa.empty:
+        st.warning("No hay propiedades con coordenadas válidas para los filtros seleccionados.")
+    else:
+        fig_map = px.scatter_map(
+            df_mapa,
+            lat="lat",
+            lon="lon",
+            color="posicion_mercado_barrio",
+            size="superficie_m2",
+            size_max=22,
+            zoom=12,
+            center={"lat": -32.947, "lon": -60.650},
+            map_style="open-street-map",
+            color_discrete_map={
+                "1. Oportunidad (<85% mediana)": "#2a9d8f",
+                "2. En rango de barrio (85-115%)": "#457b9d",
+                "3. Premium / Sobre mediana (>115%)": "#e63946",
+            },
+            hover_name="barrio",
+            hover_data={
+                "tipo_inmueble": True,
+                "superficie_m2": ":.0f",
+                "precio_usd": ":,.0f",
+                "precio_m2_usd": ":.2f",
+                "densidad_comercial_200m": True,
+                "diversidad_rubros_200m": True,
+                "trafico_resenas_200m": ":,.0f",
+                "lat": False,
+                "lon": False,
+            },
+            height=560,
+        )
+        fig_map.update_layout(margin={"r": 0, "t": 10, "l": 0, "b": 0})
+        st.plotly_chart(fig_map, use_container_width=True)
 
 with tab_eda:
     c1, c2 = st.columns(2)
