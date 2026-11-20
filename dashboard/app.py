@@ -225,31 +225,67 @@ with tab_corr:
         st.plotly_chart(fig_reg, use_container_width=True)
 
     st.divider()
-    st.subheader("🎯 Selección de Features (4 Lineales + 5 No Lineales) y Métrica Objetivo")
+    st.subheader("📐 Comportamiento de Elasticidad y Efectos No Lineales de las Features Elegidas")
 
-    c_feat, c_met = st.columns([1.6, 1])
-    with c_feat:
-        df_features_sel = pd.DataFrame([
-            {"Feature": "log_superficie_m2", "Tipo": "Lineal (1/4)", "Relación / r": "r = +0.773 (precio_usd)", "Rol de negocio": "Elasticidad log-log y economía de escala"},
-            {"Feature": "superficie_m2", "Tipo": "Lineal (2/4)", "Relación / r": "r = +0.741 (precio_usd)", "Rol de negocio": "Escala física directa del inmueble"},
-            {"Feature": "es_gran_superficie", "Tipo": "Lineal (3/4)", "Relación / r": "r = +0.689 (precio_usd)", "Rol de negocio": "Salto estructural en locales > 200 m²"},
-            {"Feature": "tiene_expensas", "Tipo": "Lineal (4/4)", "Relación / r": "r = -0.315 (precio_usd)", "Rol de negocio": "Descuento en canon por carga de expensas"},
-            {"Feature": "barrio + tipo_inmueble", "Tipo": "No Lineal (1/5)", "Relación / r": "Mediana USD 6.88 a 14.20/m²", "Rol de negocio": "Prima por categoría edilicia y vidriera"},
-            {"Feature": "log_trafico_resenas_200m", "Tipo": "No Lineal (2/5)", "Relación / r": "r = -0.54 dist. Monumento", "Rol de negocio": "Proxy no lineal de flujo peatonal real"},
-            {"Feature": "densidad_comercial_200m", "Tipo": "No Lineal (3/5)", "Relación / r": "0 a 71 comercios en 200m", "Rol de negocio": "Concentración de oferta en el entorno inmediato"},
-            {"Feature": "diversidad_rubros_200m", "Tipo": "No Lineal (4/5)", "Relación / r": "0 a 36 rubros distintos", "Rol de negocio": "Sinergia comercial y atracción de público"},
-            {"Feature": "dist_polo_mas_cercano_m", "Tipo": "No Lineal (5/5)", "Relación / r": "Mín. a Monumento/Pichincha/Pellegrini", "Rol de negocio": "Gradiente de centralidad urbana"},
-        ])
-        st.dataframe(df_features_sel, use_container_width=True, hide_index=True)
+    col_e1, col_e2 = st.columns(2)
 
-    with c_met:
-        st.info(
-            "**Target Principal:** `log1p(precio_usd)` (canon mensual en USD).\n\n"
-            "**Métrica Técnica-Financiera:** **MAPE ≤ 18%** y **MAE ≤ USD 2.00/m²**.\n\n"
-            "**Justificación estadística:** La asimetría positiva de `precio_usd` y `trafico_resenas_200m` "
-            "hace que el error porcentual absoluto (MAPE) evalúe con igual justicia locales chicos "
-            "de alta rotación y grandes superficies sin sesgo por outliers."
+    with col_e1:
+        # 1. Economía de escala: caída del USD/m² al aumentar log_superficie_m2
+        fig_escala = px.scatter(
+            df_f,
+            x="log_superficie_m2",
+            y="precio_m2_usd",
+            color="tipo_inmueble",
+            trendline="ols",
+            opacity=0.65,
+            hover_name="barrio",
+            hover_data=["superficie_m2", "precio_usd"],
+            title="Economía de Escala: log(Superficie) vs USD/m² (r = -0.35)",
+            labels={
+                "log_superficie_m2": "log(Superficie m² + 1)",
+                "precio_m2_usd": "Alquiler Unitario (USD / m² / mes)",
+                "tipo_inmueble": "Tipo",
+            },
         )
+        st.plotly_chart(fig_escala, use_container_width=True)
+
+    with col_e2:
+        # 2. Gradiente no lineal: distancia a polos vs tráfico de reseñas y diversidad de rubros
+        fig_polo = px.scatter(
+            df_f,
+            x="dist_polo_mas_cercano_m",
+            y="log_trafico_resenas_200m",
+            color="diversidad_rubros_200m",
+            size="densidad_comercial_200m",
+            size_max=18,
+            color_continuous_scale="Viridis",
+            hover_name="barrio",
+            hover_data=["tipo_inmueble", "precio_m2_usd"],
+            title="Decaimiento Espacial: Distancia a Polos vs Tráfico Comercial (200m)",
+            labels={
+                "dist_polo_mas_cercano_m": "Distancia al Polo Más Cercano (m)",
+                "log_trafico_resenas_200m": "log(Tráfico Reseñas 200m + 1)",
+                "diversidad_rubros_200m": "Rubros (200m)",
+            },
+        )
+        st.plotly_chart(fig_polo, use_container_width=True)
+
+    # 3. Efecto combinado de las binarias estructurales (es_gran_superficie y tiene_expensas)
+    df_bin = df_f.copy()
+    df_bin["Escala"] = np.where(df_bin["es_gran_superficie"] == 1, "Gran Superficie (>200 m²)", "Estándar (≤200 m²)")
+    df_bin["Expensas"] = np.where(df_bin["tiene_expensas"] == 1, "Con Expensas", "Sin Expensas")
+
+    fig_struct = px.box(
+        df_bin,
+        x="Escala",
+        y="precio_usd",
+        color="Expensas",
+        points="outliers",
+        color_discrete_map={"Sin Expensas": "#2a9d8f", "Con Expensas": "#e76f51"},
+        title="Impacto Estructural en Alquiler Total (USD): Gran Superficie vs Expensas",
+        labels={"Escala": "", "precio_usd": "Alquiler Mensual (USD)"},
+    )
+    st.plotly_chart(fig_struct, use_container_width=True)
 
 with tab_metricas:
     st.subheader("🎯 Fundamentación de Features (4 Lineales + 5 No Lineales) y KPIs de Negocio")
