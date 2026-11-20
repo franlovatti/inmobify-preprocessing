@@ -91,10 +91,24 @@ st.markdown(
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Propiedades analizadas", f"{len(df_f):,}")
-k2.metric("Mediana Alquiler (USD)", f"USD {df_f['precio_usd'].median():,.0f}")
-k3.metric("Mediana USD / m²", f"USD {df_f['precio_m2_usd'].median():.2f}")
-oportunidades = (df_f["indice_precio_relativo_barrio"] <= 0.85).sum()
-k4.metric("Oportunidades (<85% barrio)", f"{oportunidades}", f"{oportunidades/max(len(df_f),1)*100:.0f}% del filtro")
+k2.metric("Mediana Alquiler (USD / m² / mes)", f"USD {df_f['precio_m2_usd'].median():.2f}")
+
+mask_oport = df_f["indice_precio_relativo_barrio"] < 0.85
+cant_oport = int(mask_oport.sum())
+ahorro_med = (1 - df_f.loc[mask_oport, "indice_precio_relativo_barrio"].median()) * 100 if cant_oport > 0 else 0
+k3.metric(
+    "Oportunidades (IPR < 0.85)",
+    f"{cant_oport} ({cant_oport / max(len(df_f), 1) * 100:.0f}%)",
+    f"-{ahorro_med:.0f}% vs mediana barrial",
+)
+
+med_dens = df_f["densidad_comercial_200m"].median()
+oport_calif = int((mask_oport & (df_f["densidad_comercial_200m"] >= med_dens)).sum())
+k4.metric(
+    "Oportunidades Calificadas",
+    f"{oport_calif}",
+    "IPR < 0.85 + alta densidad comercial",
+)
 
 st.divider()
 
@@ -207,6 +221,33 @@ with tab_corr:
             labels={"log_superficie_m2": "log(Superficie m² + 1)", "log_precio_usd": "log(Precio USD + 1)"},
         )
         st.plotly_chart(fig_reg, use_container_width=True)
+
+    st.divider()
+    st.subheader("🎯 Selección de Features (4 Lineales + 5 No Lineales) y Métrica Objetivo")
+
+    c_feat, c_met = st.columns([1.6, 1])
+    with c_feat:
+        df_features_sel = pd.DataFrame([
+            {"Feature": "log_superficie_m2", "Tipo": "Lineal (1/4)", "Relación / r": "r = +0.773 (precio_usd)", "Rol de negocio": "Elasticidad log-log y economía de escala"},
+            {"Feature": "superficie_m2", "Tipo": "Lineal (2/4)", "Relación / r": "r = +0.741 (precio_usd)", "Rol de negocio": "Escala física directa del inmueble"},
+            {"Feature": "es_gran_superficie", "Tipo": "Lineal (3/4)", "Relación / r": "r = +0.689 (precio_usd)", "Rol de negocio": "Salto estructural en locales > 200 m²"},
+            {"Feature": "tiene_expensas", "Tipo": "Lineal (4/4)", "Relación / r": "r = -0.315 (precio_usd)", "Rol de negocio": "Descuento en canon por carga de expensas"},
+            {"Feature": "barrio + tipo_inmueble", "Tipo": "No Lineal (1/5)", "Relación / r": "Mediana USD 6.88 a 14.20/m²", "Rol de negocio": "Prima por categoría edilicia y vidriera"},
+            {"Feature": "log_trafico_resenas_200m", "Tipo": "No Lineal (2/5)", "Relación / r": "r = -0.54 dist. Monumento", "Rol de negocio": "Proxy no lineal de flujo peatonal real"},
+            {"Feature": "densidad_comercial_200m", "Tipo": "No Lineal (3/5)", "Relación / r": "0 a 71 comercios en 200m", "Rol de negocio": "Concentración de oferta en el entorno inmediato"},
+            {"Feature": "diversidad_rubros_200m", "Tipo": "No Lineal (4/5)", "Relación / r": "0 a 36 rubros distintos", "Rol de negocio": "Sinergia comercial y atracción de público"},
+            {"Feature": "dist_polo_mas_cercano_m", "Tipo": "No Lineal (5/5)", "Relación / r": "Mín. a Monumento/Pichincha/Pellegrini", "Rol de negocio": "Gradiente de centralidad urbana"},
+        ])
+        st.dataframe(df_features_sel, use_container_width=True, hide_index=True)
+
+    with c_met:
+        st.info(
+            "**Target Principal:** `log1p(precio_usd)` (canon mensual en USD).\n\n"
+            "**Métrica Técnica-Financiera:** **MAPE ≤ 18%** y **MAE ≤ USD 2.00/m²**.\n\n"
+            "**Justificación estadística:** La asimetría positiva de `precio_usd` y `trafico_resenas_200m` "
+            "hace que el error porcentual absoluto (MAPE) evalúe con igual justicia locales chicos "
+            "de alta rotación y grandes superficies sin sesgo por outliers."
+        )
 
 with tab_datos:
     st.subheader("Listado Priorizado por Índice Relativo al Barrio")
