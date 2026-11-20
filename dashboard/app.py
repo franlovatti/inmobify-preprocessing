@@ -17,6 +17,7 @@ st.set_page_config(
 # ------------------------------------------------------------------------------
 @st.cache_data(ttl=600)
 @st.cache_data(ttl=600)
+@st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
     token = st.secrets.get("APIFY_TOKEN", os.getenv("APIFY_TOKEN", "")).strip()
     if not token:
@@ -24,12 +25,16 @@ def cargar_datos() -> pd.DataFrame:
         st.stop()
 
     client = ApifyClient(token)
-    store_info = client.key_value_stores().get_or_create(name="inmobify-storage")
-    store = client.key_value_store(store_info["id"])
-    rec = store.get_record("dataset_inmobiliario_completo_rosario.csv")
+    user_info = client.user().get()
+    if not user_info or "username" not in user_info:
+        st.error("El APIFY_TOKEN configurado no es válido.")
+        st.stop()
+
+    store_id = f"{user_info['username']}/inmobify-storage"
+    rec = client.key_value_store(store_id).get_record("dataset_inmobiliario_completo_rosario.csv")
 
     if not rec or not rec.get("value"):
-        st.error("No se encontró 'dataset_inmobiliario_completo_rosario.csv' dentro de 'inmobify-storage'.")
+        st.error(f"No se encontró 'dataset_inmobiliario_completo_rosario.csv' en '{store_id}'.")
         st.stop()
 
     val = rec["value"]
