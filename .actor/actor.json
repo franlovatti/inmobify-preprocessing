@@ -9,5 +9,6 @@
     "templateId": "python-sdk"
   },
   "input": "./input_schema.json",
+  "output": "./output_schema.json",
   "dockerfile": "../Dockerfile"
 }

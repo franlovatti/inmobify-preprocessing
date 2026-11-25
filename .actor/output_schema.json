@@ -1,12 +1,19 @@
 {
-    "$schema": "https://apify.com/schemas/v1/output.ide.json",
-    "actorOutputSchemaVersion": 1,
-    "title": "Output schema",
-    "properties": {
-        "results": {
-            "type": "string",
-            "title": "Results",
-            "template": "{{links.apiDefaultDatasetUrl}}/items"
-        }
+  "actorOutputSchemaVersion": 1,
+  "title": "Resultados de Curación y Enriquecimiento Geoespacial (Inmobify ETL)",
+  "description": "Esquema de salida con el reporte de ejecución del pipeline ETL y el acceso al dataset inmobiliario curado y enriquecido.",
+  "properties": {
+    "reporte_etl": {
+      "type": "string",
+      "title": "Resumen de Ejecución ETL",
+      "description": "Métricas de filtrado, registros validados, variables generadas y referencia del Key-Value Store.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "storage_kv": {
+      "type": "string",
+      "title": "Key-Value Store del Pipeline",
+      "description": "Almacenamiento de salida donde se deposita el archivo dataset_inmobiliario_completo_rosario.csv.",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}"
     }
+  }
 }
